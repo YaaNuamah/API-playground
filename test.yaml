@@ -1,0 +1,1546 @@
+openapi: '3.0.0'
+info:
+  version: 2.0.0
+  title: 4Wings Tiler API
+  description: |
+    4Wings Tiler API
+    ## Authorization
+
+    This API requires an API key to use. The key should be included in the `Authorization` header of all requests to the API. Example: `Authorization: Bearer <token>`
+servers:
+  - url: https://gateway.api.globalfishingwatch.org
+
+paths:
+  '/v3/4wings/bq/create-temporal-dataset':
+    post:
+      tags:
+        - 4wings
+      summary: Create temporal table
+      description: Create an temporal dataset of 4wings using a query
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: query
+          description: Simulate query
+          required: false
+          name: dry-run
+          schema:
+            type: boolean
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTemporalTable'
+      responses:
+        '200':
+          $ref: '#/components/responses/CreateTemporalTableResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedErrorResponse'
+        '403':
+          $ref: '#/components/responses/ForbiddenErrorResponse'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntityErrorResponse'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailableErrorResponse'
+  '/v3/4wings/last-report':
+    get:
+      tags:
+        - 4wings
+      summary: Report
+      description: Get last report executed by the user. The last report in only saved for 30 minutes.
+      security:
+        - ApiKeyAuth: []
+
+      responses:
+        '200':
+          $ref: '#/components/responses/LastReportResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedErrorResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundErrorResponse'
+        '403':
+          $ref: '#/components/responses/ForbiddenErrorResponse'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntityErrorResponse'
+        '429':
+          $ref: '#/components/responses/TooManyRequestReportsErrorResponse'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailableErrorResponse'
+  '/v3/4wings/report':
+    get:
+      tags:
+        - 4wings
+      summary: Report
+      description: Create a report of a specified region
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: header
+          description: The content returned is available is this language, the API will returned it. If the request does not contain the header, the default value is en-EN. In case that the request has an invalid value, the default value is en-EN as well.
+          required: false
+          name: Content-Language
+          schema:
+            type: string
+            enum:
+              - es-ES
+              - en-EN
+          example: en-EN
+        - in: query
+          description: Low means at 10th degree resolution and High means at 100th degree resolution. Only required if spatial-aggregation is false or it's not sent
+          required: false
+          name: spatial-resolution
+          example: LOW
+          schema:
+            type: string
+            enum:
+              - LOW
+              - HIGHT
+        - in: query
+          description: Vessel group ids to filter (separated by comma). Vessel groups applied at dataset with index 0. At the same as datasets, this query param could be send with different index to apply filters to other datasets.
+          required: false
+          name: vessel-groups[0]
+          example: 1,2
+          schema:
+            type: string
+        - in: query
+          description: As result you get a zip file that contains caveat information and also the actual file including the results that could be in different results
+          required: true
+          name: format
+          example: CSV
+          schema:
+            type: string
+            enum:
+              - CSV
+              - TIF
+              - JSON
+        - in: query
+          description: The report data can be grouped by different criteria, for example a csv by vessel_id means that you get on row for each vessel id
+          required: true
+          name: group-by
+          example: VESSEL_ID
+          schema:
+            type: string
+            enum:
+              - VESSEL_ID
+              - FLAG
+              - GEARTYPE
+              - FLAGANDGEARTYPE
+              - MMSI
+        - in: query
+          description: You can decide the level of detail regarding time. For example if you request csv, group by vessel_id and daily, you get one row per vessel id per day
+          required: true
+          name: temporal-resolution
+          example: YEARLY
+          schema:
+            type: string
+            enum:
+              - HOURLY
+              - DAILY
+              - MONTHLY
+              - YEARLY
+              - ENTIRE
+        - in: query
+          description: |
+            Specify the datasets that will be used to create the style. You can learn more about which are the possible datasets [here](https://globalfishingwatch.org/our-apis/documentation#key-concepts-api-dataset-and-vessel-id). The parameters should be defined using an index, in case only one dataset is going to be sent: ?dataset[0]=xxxxx, in case of multiple datasets: ?dataset[0]=xxxxx&dataset[1]=yyyyy
+          required: true
+          name: datasets[0]
+          example: public-global-fishing-effort:latest
+          schema:
+            type: string
+        - in: query
+          description: |
+            Filters are applied to the dataset parameter with the corresponding index. For example if we want to apply a filter to dataset[0], we should apply the filter attributes to filter[0].For AIS fishing effort, the possible filters are: flag, geartype
+          required: false
+          name: filters[0]
+          example: flag in ('ESP')
+          schema:
+            type: string
+        - in: query
+          description: Start date and end date to filter the data
+          required: false
+          name: date-range
+          example: 2021-01-01,2021-03-01
+          schema:
+            type: string
+        - in: query
+          description: |
+            Aggregates spatially the data in the report. With value true, the formats supported are only csv and json. Default value: false
+          required: false
+          name: spatial-aggregation
+          example: false
+          schema:
+            type: string
+        - in: query
+          description: Distance to draw the buffer (negative values are allowed)
+          required: false
+          name: buffer-value
+          example: 100
+          schema:
+            type: number
+        - in: query
+          description: Unit of the buffer value. Possible values (MILES, NAUTICALMILES, KILOMETERS, RADIANS, DEGREES)
+          required: false
+          name: buffer-unit
+          example: nauticalmiles
+          schema:
+            type: string
+            enum: [MILES, NAUTICALMILES, KILOMETERS, RADIANS, DEGREES]
+        - in: query
+          description: Operation to apply to the region after the buffer. Only works join with buffer-value and buffer-unit query param. If not send, the default operation is dissolve
+          required: false
+          name: buffer-operation
+          example: true
+          schema:
+            type: string
+            enum: [DIFFERENCE, DISSOLVE]
+        - in: query
+          description: Id of the region
+          required: true
+          name: region-id
+          example: 555635930
+          schema:
+            type: number
+        - in: query
+          description: Id of the dataset to obtain the region
+          required: true
+          name: region-dataset
+          example: public-mpa-all
+          schema:
+            type: string
+
+      responses:
+        '200':
+          $ref: '#/components/responses/CreateReportResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedErrorResponse'
+        '403':
+          $ref: '#/components/responses/ForbiddenErrorResponse'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntityErrorResponse'
+        '429':
+          $ref: '#/components/responses/TooManyRequestReportsErrorResponse'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailableErrorResponse'
+    post:
+      tags:
+        - 4wings
+      summary: Report
+      description: Create a report of a specified region
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: header
+          description: The content returned is available is this language, the API will returned it. If the request does not contain the header, the default value is en-EN. In case that the request has an invalid value, the default value is en-EN as well.
+          required: false
+          name: Content-Language
+          schema:
+            type: string
+            enum:
+              - es-ES
+              - en-EN
+          example: en-EN
+        - in: query
+          description: Low means at 10th degree resolution and High means at 100th degree resolution. Only required if spatial-aggregation is false or it's not sent
+          required: false
+          name: spatial-resolution
+          example: LOW
+          schema:
+            type: string
+            enum:
+              - LOW
+              - high
+        - in: query
+          description: Vessel group ids to filter (separated by comma). Vessel groups applied at dataset with index 0. At the same as datasets, this query param could be send with different index to apply filters to other datasets.
+          required: false
+          name: vessel-groups[0]
+          example: 1,2
+          schema:
+            type: string
+        - in: query
+          description: As result you get a zip file that contains caveat information and also the actual file including the results that could be in different results
+          required: true
+          name: format
+          example: CSV
+          schema:
+            type: string
+            enum:
+              - CSV
+              - TIF
+              - JSON
+        - in: query
+          description: The report data can be grouped by different criteria, for example a CSV by vessel_id means that you get on row for each vessel id
+          required: true
+          name: group-by
+          example: VESSEL_ID
+          schema:
+            type: string
+            enum:
+              - VESSEL_ID
+              - FLAG
+              - GEARTYPE
+              - FLAGANDGEARTYPE
+              - MMSI
+        - in: query
+          description: You can decide the level of detail regarding time. For example if you request CSV, group by VESSEL_ID and DAILY, you get one row per vessel id per day
+          required: true
+          name: temporal-resolution
+          example: YEARLY
+          schema:
+            type: string
+            enum:
+              - HOURLY
+              - DAILY
+              - MONTHLY
+              - YEARLY
+              - ENTIRE
+        - in: query
+          description: |
+            Specify the datasets that will be used to create the style. You can learn more about which are the possible datasets [here](https://globalfishingwatch.org/our-apis/documentation#key-concepts-api-dataset-and-vessel-id). The parameters should be defined using an index, in case only one dataset is going to be sent: ?dataset[0]=xxxxx, in case of multiple datasets: ?dataset[0]=xxxxx&dataset[1]=yyyyy
+          required: true
+          name: datasets[0]
+          example: public-global-fishing-effort:latest
+          schema:
+            type: string
+        - in: query
+          description: |
+            Filters are applied to the dataset parameter with the corresponding index. For example if we want to apply a filter to dataset[0], we should apply the filter attributes to filter[0].For AIS fishing effort, the possible filters are: flag, geartype
+          required: false
+          name: filters[0]
+          example: flag in ('ESP')
+          schema:
+            type: string
+        - in: query
+          description: Start date and end date to filter the data
+          required: false
+          name: date-range
+          example: 2021-01-01,2021-03-01
+          schema:
+            type: string
+        - in: query
+          description: |
+            Aggregates spatially the data in the report. With value true, the formats supported are only csv and json. Default value: false
+          required: false
+          name: spatial-aggregation
+          example: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/CreateReportGeojson'
+                - $ref: '#/components/schemas/CreateReportRegion'
+      responses:
+        '200':
+          $ref: '#/components/responses/CreateReportResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedErrorResponse'
+        '403':
+          $ref: '#/components/responses/ForbiddenErrorResponse'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntityErrorResponse'
+        '429':
+          $ref: '#/components/responses/TooManyRequestReportsErrorResponse'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailableErrorResponse'
+  '/v3/4wings/stats':
+    get:
+      tags:
+        - 4wings
+      summary: Stats
+      description: Get statistics of the whole world
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: query
+          description: Statitics fields (separated by comma)
+          required: false
+          name: fields
+          example: VESSEL-IDS
+          schema:
+            type: string
+            enum:
+              - VESSEL-IDS
+              - FLAGS
+              - ACTIVITYHOURS
+        - in: query
+          description: Vessel group ids to filter (separated by comma). Vessel groups applied at dataset with index 0. At the same as datasets, this query param could be send with different index to apply filters to other datasets.
+          required: false
+          name: vessel-groups[0]
+          example: 1,2
+          schema:
+            type: string
+        - in: query
+          description: |
+            Specify the datasets that will be used to create the style. You can learn more about which are the possible datasets [here](https://globalfishingwatch.org/our-apis/documentation#key-concepts-api-dataset-and-vessel-id). The parameters should be defined using an index, in case only one dataset is going to be sent: ?dataset[0]=xxxxx, in case of multiple datasets: ?dataset[0]=xxxxx&dataset[1]=yyyyy
+          required: true
+          name: datasets[0]
+          example: public-global-fishing-effort:latest
+          schema:
+            type: string
+        - in: query
+          description: |
+            Filters are applied to the dataset parameter with the corresponding index. For example if we want to apply a filter to dataset[0], we should apply the filter attributes to filter[0].For AIS fishing effort, the possible filters are: flag, geartype
+          required: false
+          name: filters[0]
+          example: flag in ('ESP')
+          schema:
+            type: string
+        - in: query
+          description: Start date and end date to filter the data
+          required: false
+          name: date-range
+          example: 2021-01-01,2021-03-01
+          schema:
+            type: string
+      responses:
+        '200':
+          $ref: '#/components/responses/StatsResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedErrorResponse'
+        '403':
+          $ref: '#/components/responses/ForbiddenErrorResponse'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntityErrorResponse'
+        '429':
+          $ref: '#/components/responses/TooManyRequestReportsErrorResponse'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailableErrorResponse'
+  '/v3/4wings/generate-png':
+    post:
+      tags:
+        - 4wings
+      summary: PNG Tiler
+      description: Create a style for generate png tiles
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: query
+          description: Color in hexadecimal used to generate the color ramp
+          required: false
+          name: color
+          example: '#361c0c'
+          schema:
+            type: string
+        - in: query
+          description: 'Tiles are available at several time resolutions (hourly, daily and 10 days), it means one frame every one hour, one day or 10 days. For each resolution, the max displayable length items: 1 hour (20 days),  1 day (1 year), 10 days (several years depending on the dataset for AIS Fishing effort it starts in 2012)'
+          required: false
+          name: interval
+          example: 10DAYS
+          schema:
+            type: string
+            enum:
+              - 10DAYS
+              - DAY
+              - HOUR
+              - MONTH
+              - YEAR
+        - in: query
+          description: |
+            Specify the datasets that will be used to create the style. You can learn more about which are the possible datasets [here](https://globalfishingwatch.org/our-apis/documentation#key-concepts-api-dataset-and-vessel-id). The parameters should be defined using an index, in case only one dataset is going to be sent: ?dataset[0]=xxxxx, in case of multiple datasets: ?dataset[0]=xxxxx&dataset[1]=yyyyy
+          required: true
+          name: datasets[0]
+          example: public-global-fishing-effort:latest
+          schema:
+            type: string
+        - in: query
+          description: |
+            Filters are applied to the dataset parameter with the corresponding index. For example if we want to apply a filter to dataset[0], we should apply the filter attributes to filter[0].For AIS fishing effort, the possible filters are: flag, geartype
+          required: false
+          name: filters[0]
+          example: flag in ('ESP')
+          schema:
+            type: string
+        - in: query
+          description: Start date and end date to filter the data
+          required: false
+          name: date-range
+          example: 2021-01-01,2021-03-01
+          schema:
+            type: string
+        - in: query
+          description: Vessel group ids to filter (separated by comma). Vessel groups applied at dataset with index 0. At the same as datasets, this query param could be send with different index to apply filters to other datasets.
+          required: false
+          name: vessel-groups[0]
+          example: 1,2
+          schema:
+            type: string
+      responses:
+        '200':
+          $ref: '#/components/responses/CreatePNGResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedErrorResponse'
+        '403':
+          $ref: '#/components/responses/ForbiddenErrorResponse'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntityErrorResponse'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailableErrorResponse'
+  '/v3/4wings/interaction/{z}/{x}/{y}/{cellColumns}/{cellRows}':
+    get:
+      tags:
+        - 4wings
+      summary: Interaction
+      description: Return info in the cells of the tile specified
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          description: Zoom level (from 0 to 12)
+          required: true
+          name: z
+          example: 0
+          schema:
+            type: number
+        - in: path
+          description: X index (lat) of the tile
+          required: true
+          name: x
+          example: 0
+          schema:
+            type: number
+        - in: path
+          description: Y index (lon) of the tile
+          required: true
+          name: 'y'
+          example: 0
+          schema:
+            type: number
+        - in: path
+          description: Index X of the cells, separated by comma
+          required: true
+          name: cellColumns
+          example: 0,1,2
+          schema:
+            type: string
+        - in: path
+          description: Index Y of the cells, separated by comma
+          required: true
+          name: cellRows
+          example: 0,1,2
+          schema:
+            type: string
+        - in: query
+          description: Number maximun of results
+          required: false
+          name: limit
+          example: 10
+          schema:
+            type: number
+        - in: query
+          description: |
+            Specify the datasets that will be used to create the style. You can learn more about which are the possible datasets [here](https://globalfishingwatch.org/our-apis/documentation#key-concepts-api-dataset-and-vessel-id). The parameters should be defined using an index, in case only one dataset is going to be sent: ?dataset[0]=xxxxx, in case of multiple datasets: ?dataset[0]=xxxxx&dataset[1]=yyyyy
+          required: true
+          name: datasets[0]
+          example: public-global-fishing-effort:latest
+          schema:
+            type: string
+        - in: query
+          description: |
+            Filters are applied to the dataset parameter with the corresponding index. For example if we want to apply a filter to dataset[0], we should apply the filter attributes to filter[0].For AIS fishing effort, the possible filters are: flag, geartype
+          required: false
+          name: filters[0]
+          example: flag in ('ESP')
+          schema:
+            type: string
+        - in: query
+          description: Start date and end date to filter the data
+          required: false
+          name: date-range
+          example: 2021-01-01,2021-03-01
+          schema:
+            type: string
+        - in: query
+          description: Vessel group ids to filter (separated by comma). Vessel groups applied at dataset with index 0. At the same as datasets, this query param could be send with different index to apply filters to other datasets.
+          required: false
+          name: vessel-groups[0]
+          example: 1,2
+          schema:
+            type: string
+      responses:
+        '200':
+          $ref: '#/components/responses/InteractionResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedErrorResponse'
+        '403':
+          $ref: '#/components/responses/ForbiddenErrorResponse'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntityErrorResponse'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailableErrorResponse'
+  '/v3/4wings/interaction/{z}/{x}/{y}/{cells}':
+    get:
+      tags:
+        - 4wings
+      summary: Interaction
+      description: Return info in the cells of the tile specified
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          description: Zoom level (from 0 to 12)
+          required: true
+          name: z
+          example: 0
+          schema:
+            type: number
+        - in: path
+          description: X index (lat) of the tile
+          required: true
+          name: x
+          example: 0
+          schema:
+            type: number
+        - in: path
+          description: Y index (lon) of the tile
+          required: true
+          name: 'y'
+          example: 0
+          schema:
+            type: number
+        - in: path
+          description: Indexes of cells separated by comma
+          required: true
+          name: cells
+          example: 107,1,2
+          schema:
+            type: string
+        - in: query
+          description: Number maximun of results
+          required: false
+          name: limit
+          example: 10
+          schema:
+            type: number
+        - in: query
+          description: |
+            Specify the datasets that will be used to create the style. You can learn more about which are the possible datasets [here](https://globalfishingwatch.org/our-apis/documentation#key-concepts-api-dataset-and-vessel-id). The parameters should be defined using an index, in case only one dataset is going to be sent: ?dataset[0]=xxxxx, in case of multiple datasets: ?dataset[0]=xxxxx&dataset[1]=yyyyy
+          required: true
+          name: datasets[0]
+          example: public-global-fishing-effort:latest
+          schema:
+            type: string
+        - in: query
+          description: |
+            Filters are applied to the dataset parameter with the corresponding index. For example if we want to apply a filter to dataset[0], we should apply the filter attributes to filter[0].For AIS fishing effort, the possible filters are: flag, geartype
+          required: false
+          name: filters[0]
+          example: flag in ('ESP')
+          schema:
+            type: string
+        - in: query
+          description: Start date and end date to filter the data
+          required: false
+          name: date-range
+          example: 2021-01-01,2021-03-01
+          schema:
+            type: string
+        - in: query
+          description: Vessel group ids to filter (separated by comma). Vessel groups applied at dataset with index 0. At the same as datasets, this query param could be send with different index to apply filters to other datasets.
+          required: false
+          name: vessel-groups[0]
+          example: 1,2
+          schema:
+            type: string
+      responses:
+        '200':
+          $ref: '#/components/responses/InteractionResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedErrorResponse'
+        '403':
+          $ref: '#/components/responses/ForbiddenErrorResponse'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntityErrorResponse'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailableErrorResponse'
+  '/v3/4wings/bins/{z}':
+    get:
+      tags:
+        - 4wings
+      summary: Bins
+      description: Generate bins of data to know the data (For example to create a color ramp of the data)
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          description: Zoom level (from 0 to 12)
+          required: true
+          name: z
+          example: 0
+          schema:
+            type: number
+        - in: query
+          description: Aggregates temporarily the data in the tile
+          required: false
+          name: temporal-aggregation
+          example: true
+          schema:
+            type: boolean
+        - in: query
+          description: Number of bins or buckets that you would like
+          required: false
+          name: num-bins
+          example: 10
+          schema:
+            type: number
+        - in: query
+          description: |
+            Tiles are available at several time resolutions (hourly, daily and 10 days), it means one frame every one hour, one day or 10 days. For each resolution, the  the max displayable length items:
+              - 1 hour:  20 days
+              - 1 day: 1 year
+              - 10 days: several years depending on the dataset for AIS Fishing effort it starts in 2012
+          required: false
+          name: interval
+          example: 10DAYS
+          schema:
+            type: string
+            enum:
+              - 10DAYS
+              - DAY
+              - HOUR
+              - MONTH
+              - YEAR
+        - in: query
+          description: |
+            Specify the datasets that will be used to create the style. You can learn more about which are the possible datasets [here](https://globalfishingwatch.org/our-apis/documentation#key-concepts-api-dataset-and-vessel-id). The parameters should be defined using an index, in case only one dataset is going to be sent: ?dataset[0]=xxxxx, in case of multiple datasets: ?dataset[0]=xxxxx&dataset[1]=yyyyy
+          required: true
+          name: datasets[0]
+          example: public-global-fishing-effort:latest
+          schema:
+            type: string
+        - in: query
+          description: |
+            Filters are applied to the dataset parameter with the corresponding index. For example if we want to apply a filter to dataset[0], we should apply the filter attributes to filter[0].For AIS fishing effort, the possible filters are: flag, geartype
+          required: false
+          name: filters[0]
+          example: flag in ('ESP')
+          schema:
+            type: string
+        - in: query
+          description: Start date and end date to filter the data
+          required: false
+          name: date-range
+          example: 2021-01-01,2021-03-01
+          schema:
+            type: string
+        - in: query
+          description: Vessel group ids to filter (separated by comma). Vessel groups applied at dataset with index 0. At the same as datasets, this query param could be send with different index to apply filters to other datasets.
+          required: false
+          name: vessel-groups[0]
+          example: 1,2
+          schema:
+            type: string
+      responses:
+        '200':
+          $ref: '#/components/responses/BinsResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedErrorResponse'
+        '403':
+          $ref: '#/components/responses/ForbiddenErrorResponse'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntityErrorResponse'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailableErrorResponse'
+
+  '/v3/4wings/tile/heatmap/{z}/{x}/{y}':
+    get:
+      tags:
+        - 4wings
+      summary: Tile
+      description: Get fishing effort in raster format by tile coordinates
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          description: Zoom level (from 0 to 12)
+          required: true
+          name: z
+          example: 1
+          schema:
+            type: number
+        - in: path
+          description: X index (lat) of the tile
+          required: true
+          name: x
+          example: 0
+          schema:
+            type: number
+        - in: path
+          description: Y index (lon) of the tile
+          required: true
+          name: 'y'
+          example: 0
+          schema:
+            type: number
+        - in: query
+          description: Aggregates temporarily the data in the tile
+          required: false
+          name: temporal-aggregation
+          example: true
+          schema:
+            type: boolean
+        - in: query
+          description: |
+            Tiles are available at several time resolutions (hourly, daily and 10 days), it means one frame every one hour, one day or 10 days. For each resolution, the  the max displayable length items:
+              - 1 hour:  20 days
+              - 1 day: 1 year
+              - 10 days: several years depending on the dataset for AIS Fishing effort it starts in 2012
+          required: false
+          name: interval
+          example: 10DAYS
+          schema:
+            type: string
+            enum:
+              - 10DAYS
+              - DAY
+              - HOUR
+              - MONTH
+              - YEAR
+        - in: query
+          description: |
+            Specify the datasets that will be used to create the style. You can learn more about which are the possible datasets [here](https://globalfishingwatch.org/our-apis/documentation#key-concepts-api-dataset-and-vessel-id). The parameters should be defined using an index, in case only one dataset is going to be sent: ?dataset[0]=xxxxx, in case of multiple datasets: ?dataset[0]=xxxxx&dataset[1]=yyyyy
+          required: true
+          name: datasets[0]
+          example: public-global-fishing-effort:latest
+          schema:
+            type: string
+        - in: query
+          description: |
+            Filters are applied to the dataset parameter with the corresponding index. For example if we want to apply a filter to dataset[0], we should apply the filter attributes to filter[0].For AIS fishing effort, the possible filters are: flag, geartype
+          required: false
+          name: filters[0]
+          example: flag in ('ESP')
+          schema:
+            type: string
+        - in: query
+          description: Start date and end date to filter the data
+          required: false
+          name: date-range
+          example: 2021-01-01,2021-03-01
+          schema:
+            type: string
+        - in: query
+          description: Format of response
+          required: false
+          name: format
+          example: MVT
+          schema:
+            type: string
+            enum:
+              - MVT
+              - PNG
+              - INTARRAY
+              - 4WINGS
+        - in: query
+          description: Id of the style obtained with endpoint /v1/4wings/generate-png
+          required: false
+          name: style
+          example: eyJjb2xvciI6WzIyLDYzLDEzN10sInJhbXAiOlswLDE4NC41MDM4ODg4ODg4ODg4Nyw2NjkuNDg3Nzc3Nzc3Nzc3OAwxNDQ2LjUwODA1NTU1NTU1NTMsMjg2OS42MjA1NTU1NTU1NTU3LDU4OTEuMDI1NTU1NTU1NTU1LDg1MjguODkxMTExMTExMTEsMTE5MTYuNjA2OTQ0NDQ0NDQ0LDE3OTMyLjI3NjM4ODg4ODg4OF18
+          schema:
+            type: string
+        - in: query
+          description: Vessel group ids to filter (separated by comma). Vessel groups applied at dataset with index 0. At the same as datasets, this query param could be send with different index to apply filters to other datasets.
+          required: false
+          name: vessel-groups[0]
+          example: 1,2
+          schema:
+            type: string
+
+      responses:
+        '200':
+          $ref: '#/components/responses/TileResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedErrorResponse'
+        '403':
+          $ref: '#/components/responses/ForbiddenErrorResponse'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntityErrorResponse'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailableErrorResponse'
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+
+  responses:
+    #-------------------------------
+    # Reusable Errors Responses
+    #-------------------------------
+
+    NotContentResponse:
+      description: No Content.
+      content:
+        application/json:
+          schema:
+            type: object
+
+    UnauthorizedErrorResponse:
+      description: No Unauthorized.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              statusCode:
+                type: number
+                example: 401
+              error:
+                type: string
+                example: Unauthorized
+              messages:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ErrorDetails'
+
+    ForbiddenErrorResponse:
+      description: You do not have permissions to do the action.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              statusCode:
+                type: number
+                example: 403
+              error:
+                type: string
+                example: Forbidden
+              messages:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ErrorDetails'
+
+    NotFoundErrorResponse:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              statusCode:
+                type: number
+                example: 404
+              error:
+                type: string
+                example: NotFound
+              messages:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ErrorDetails'
+
+    UnprocessableEntityErrorResponse:
+      description: Unprocessable Entity. Validation error.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              statusCode:
+                type: number
+                example: 422
+              error:
+                type: string
+                example: UnprocessableEntity
+              messages:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ErrorDetails'
+    TooManyRequestReportsErrorResponse:
+      description: Too Many Request.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              statusCode:
+                type: number
+                example: 429
+              error:
+                type: string
+                example: Too Many Requests
+              messages:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ErrorDetailsReport'
+
+    ServiceUnavailableErrorResponse:
+      description: Service Unavailable.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              statusCode:
+                type: number
+                example: 503
+              error:
+                type: string
+                example: Service Unavailable
+              messages:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ErrorDetails'
+
+    #-------------------------------
+    # Not reusable schemas
+    #-------------------------------
+    CreateTemporalTableResponse:
+      description: Create an temporal table
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CreateTemporalDatasetResponse'
+
+    CreateReportResponse:
+      description: Report response
+      content:
+        application/zip:
+          schema:
+            $ref: '#/components/schemas/CreateReportResponse'
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CreateReportJSONResponse'
+    LastReportResponse:
+      description: Last Report response
+      content:
+        application/zip:
+          schema:
+            $ref: '#/components/schemas/CreateReportResponse'
+        application/json:
+          schema:
+            oneOf:
+              - $ref: '#/components/schemas/CreateReportJSONResponse'
+              - $ref: '#/components/schemas/ReportRunningResponse'
+              - $ref: '#/components/schemas/ReportErrorResponse'
+    StatsResponse:
+      description: Stats response
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/StatsResponse'
+    CreatePNGResponse:
+      description: PNG response
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CreatePNGResponse'
+    InteractionResponse:
+      description: Interaction response
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/InteractionResponse'
+    BinsResponse:
+      description: Bins response
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/BinsResponse'
+    TileResponse:
+      description: Tile response
+      content:
+        image/png:
+          schema:
+            $ref: '#/components/schemas/TileResponse'
+        application/vnd.mapbox-vector-tile:
+          schema:
+            $ref: '#/components/schemas/TileResponse'
+        application/x-protobuf:
+          schema:
+            $ref: '#/components/schemas/TileResponse'
+
+  #-------------------------------
+  # Reusable schemas (data models)
+  #-------------------------------
+
+  schemas:
+    ErrorDetails:
+      type: object
+      properties:
+        title:
+          type: string
+        detail:
+          type: string
+    ErrorDetailsReport:
+      type: object
+      properties:
+        title:
+          type: string
+        detail:
+          type: string
+        metadata:
+          type: object
+          properties:
+            currentReportBody:
+              type: object
+              description: More info about the report executing currently
+              properties:
+                geojson:
+                  type: string
+                  description: Geojson of the current executing report
+                region:
+                  type: object
+                  description: Region info of the current executing report
+            currentReportUrl:
+              type: string
+              description: Url of the report executing currently
+    #
+    # Create Temporal dataset
+    #
+    CreateTemporalTable:
+      type: object
+      properties:
+        query:
+          type: string
+          example: select 1 as id
+        name:
+          type: string
+          example: Test New Query
+        ttl:
+          type: number
+          example: 30
+          default: 30
+      required:
+        - name
+        - query
+    CreateTemporalDatasetResponse:
+      type: object
+      properties:
+        totalBytes:
+          type: number
+          example: 1024
+        totalBytesPretty:
+          type: string
+          example: 1kb
+        id:
+          type: string
+          description: Id of the created dataset. (Only available if dry-run = false)
+          example: test
+        startDate:
+          type: string
+          format: date
+          description: Min date of the data. (Only available if dry-run = false)
+          example: 2021-01-01
+        endDate:
+          type: string
+          format: date
+          description: Max date of the data. (Only available if dry-run = false)
+          example: 2022-01-01
+
+    #
+    # Interaction
+    #
+    InteractionResponse:
+      type: object
+      properties:
+        total:
+          type: number
+          description: Total of elements
+        limit:
+          type: number
+          description: Limit of number of elements returned
+        offset:
+          type: number
+        nextOffset:
+          type: number
+        metadata:
+          type: object
+        entries:
+          type: array
+          description: It has as many elements as there are dataset groups sent
+          items:
+            type: array
+            description: It has as many elements as there are dataset in the group
+            items:
+              type: object
+              properties:
+                hours:
+                  type: number
+                  description: hours of fishing
+                  example: 10
+                id:
+                  type: string
+                  description: Id of vessel
+                  example: bb74a7f16-6ca5-f372-3bc6-2d930427f5b1
+    #
+    # Bins
+    #
+    BinsResponse:
+      type: object
+      properties:
+        total:
+          type: number
+          description: Total of elements
+        limit:
+          type: number
+          description: Limit of number of elements returned
+        offset:
+          type: number
+        nextOffset:
+          type: number
+        metadata:
+          type: object
+        entries:
+          type: array
+          description: It has as many elements as there are datasets
+          items:
+            type: array
+            description: It has as many elements as num bins specified
+            example:
+              [
+                0,
+                143.92472222222221,
+                648.9243889980555,
+                1669.4305555555566,
+                2933.968777777777,
+                5242.189444444445,
+                …,
+              ]
+            items:
+              type: number
+    #
+    # Tile
+    #
+    TileResponse:
+      type: object
+      format: binary
+
+    #
+    # Report
+    #
+    CreateReportGeojson:
+      type: object
+      properties:
+        geojson:
+          type: object
+          example: '{"type":"FeatureCollection","features":[{"type":"Feature","properties":{},"geometry":{"type":"Polygon","coordinates":[[[29,43],[32,43],[32,43],[29,43],[29,43]]]}}]}'
+
+      required:
+        - geojson
+
+    CreateReportRegion:
+      type: object
+      properties:
+        region:
+          type: object
+          properties:
+            dataset:
+              type: string
+              example: public-mpa-all
+              description: id of the dataset to obtain the geometry
+            id:
+              type: number
+              example: 1
+            bufferUnit:
+              type: string
+              example: nauticalmiles
+              enum: [MILES, NAUTICALMILES, KILOMETERS, RADIANS, DEGREES]
+              description: Unit of the buffer value. Possible values (MILES, NAUTICALMILES, KILOMETERS, RADIANS, DEGREES)
+            bufferValue:
+              type: number
+              example: 2
+              description: Distance to draw the buffer (negative values are allowed)
+            bufferOperation:
+              type: string
+              enum: [DIFFERENCE, DISSOLVE]
+              example: false
+              description: Operation to apply to the region after the buffer. Only works together with buffer-value and buffer-unit query param. If not send, the default operation is dissolve
+      required:
+        - region
+    CreateReportResponse:
+      type: object
+      format: binary
+    ReportRunningResponse:
+      description: Object send when the last report is running
+      type: object
+      properties:
+        status:
+          type: string
+          description: Status of the report. Only value running
+        lastUpdate:
+          type: string
+          description: Last update time of the report status
+        uri:
+          type: string
+          description: uri of the running report
+    ReportErrorResponse:
+      type: object
+      description: Object send when the last report sent an error
+      properties:
+        status:
+          type: string
+          description: Status of the report. Status code of the error (Example 422)
+        message:
+          type: object
+          description: Object with the content of the error that the report threw
+          properties:
+            statusCode:
+              type: number
+              description: Status code error
+            error:
+              type: string
+              description: Error description
+            messages:
+              type: array
+              items:
+                type: object
+                properties:
+                  title:
+                    type: string
+                    description: Title of the error
+                  description:
+                    type: string
+                    description: Description of the error
+
+    CreateReportJSONResponse:
+      type: object
+      properties:
+        total:
+          type: number
+          description: Total of elements
+        limit:
+          type: number
+          description: Limit of number of elements returned
+        offset:
+          type: number
+        nextOffset:
+          type: number
+        metadata:
+          type: object
+        entries:
+          type: array
+          items:
+            type: object
+    StatsResponse:
+      type: array
+      description: level of zoom.
+      items:
+        type: object
+        properties:
+          activityHours:
+            type: number
+            description: Total activity hours (if field is requested)
+          flags:
+            type: number
+            description: Total different flags (if field is requested)
+          vesselIds:
+            type: number
+            description: Total different vessel ids (if field is requested)
+          maxLat:
+            type: number
+            description: Maximum latitude with data
+          minLat:
+            type: number
+            description: Minimum latitude with data
+          maxLon:
+            type: number
+            description: Maximun longitude with data
+          minLon:
+            type: number
+            description: Minimum longitude with data
+
+    #
+    # Report
+    #
+    CreatePNGResponse:
+      type: object
+      properties:
+        url:
+          type: string
+          example: https://gateway.api.globalfishingwatch.org/v1/4wings/tile/heatmap/{z}/{x}/{y}?format=png&interval=%s&datasets[0]=public-global-fishing-effort:latest
+          description: Url to obtain the tiles
+
+        colorRamp:
+          type: object
+          properties:
+            stepsByZoom:
+              type: object
+              properties:
+                0:
+                  type: array
+                  description: level of zoom.
+                  items:
+                    type: object
+                    properties:
+                      color:
+                        type: string
+                        example: rgba(255, 255, 255, 0)
+                        description: color associated to the value
+                      value:
+                        type: number
+                        description: value of the color
+                        example: 10
+                1:
+                  type: array
+                  description: level of zoom.
+                  items:
+                    type: object
+                    properties:
+                      color:
+                        type: string
+                        example: rgba(255, 255, 255, 0)
+                        description: color associated to the value
+                      value:
+                        type: number
+                        description: value of the color
+                        example: 10
+                2:
+                  type: array
+                  description: level of zoom.
+                  items:
+                    type: object
+                    properties:
+                      color:
+                        type: string
+                        example: rgba(255, 255, 255, 0)
+                        description: color associated to the value
+                      value:
+                        type: number
+                        description: value of the color
+                        example: 10
+                3:
+                  type: array
+                  description: level of zoom.
+                  items:
+                    type: object
+                    properties:
+                      color:
+                        type: string
+                        example: rgba(255, 255, 255, 0)
+                        description: color associated to the value
+                      value:
+                        type: number
+                        description: value of the color
+                        example: 10
+                4:
+                  type: array
+                  description: level of zoom.
+                  items:
+                    type: object
+                    properties:
+                      color:
+                        type: string
+                        example: rgba(255, 255, 255, 0)
+                        description: color associated to the value
+                      value:
+                        type: number
+                        description: value of the color
+                        example: 10
+                5:
+                  type: array
+                  description: level of zoom.
+                  items:
+                    type: object
+                    properties:
+                      color:
+                        type: string
+                        example: rgba(255, 255, 255, 0)
+                        description: color associated to the value
+                      value:
+                        type: number
+                        description: value of the color
+                        example: 10
+                6:
+                  type: array
+                  description: level of zoom.
+                  items:
+                    type: object
+                    properties:
+                      color:
+                        type: string
+                        example: rgba(255, 255, 255, 0)
+                        description: color associated to the value
+                      value:
+                        type: number
+                        description: value of the color
+                        example: 10
+                7:
+                  type: array
+                  description: level of zoom.
+                  items:
+                    type: object
+                    properties:
+                      color:
+                        type: string
+                        example: rgba(255, 255, 255, 0)
+                        description: color associated to the value
+                      value:
+                        type: number
+                        description: value of the color
+                        example: 10
+                8:
+                  type: array
+                  description: level of zoom.
+                  items:
+                    type: object
+                    properties:
+                      color:
+                        type: string
+                        example: rgba(255, 255, 255, 0)
+                        description: color associated to the value
+                      value:
+                        type: number
+                        description: value of the color
+                        example: 10
+                9:
+                  type: array
+                  description: level of zoom.
+                  items:
+                    type: object
+                    properties:
+                      color:
+                        type: string
+                        example: rgba(255, 255, 255, 0)
+                        description: color associated to the value
+                      value:
+                        type: number
+                        description: value of the color
+                        example: 10
+                10:
+                  type: array
+                  description: level of zoom.
+                  items:
+                    type: object
+                    properties:
+                      color:
+                        type: string
+                        example: rgba(255, 255, 255, 0)
+                        description: color associated to the value
+                      value:
+                        type: number
+                        description: value of the color
+                        example: 10
+                11:
+                  type: array
+                  description: level of zoom.
+                  items:
+                    type: object
+                    properties:
+                      color:
+                        type: string
+                        example: rgba(255, 255, 255, 0)
+                        description: color associated to the value
+                      value:
+                        type: number
+                        description: value of the color
+                        example: 10
+                12:
+                  type: array
+                  description: level of zoom.
+                  items:
+                    type: object
+                    properties:
+                      color:
+                        type: string
+                        example: rgba(255, 255, 255, 0)
+                        description: color associated to the value
+                      value:
+                        type: number
+                        description: value of the color
+                        example: 10
